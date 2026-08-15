@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Đọc Giùm — TTS Tiếng Việt</title>
+<style>
+  :root{
+    --bg:#14110f;
+    --panel:#1c1815;
+    --line:#332c26;
+    --paper:#eee6d8;
+    --amber:#e0a458;
+    --amber-dim:#8a6a3c;
+    --muted:#8a7f70;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--paper);
+    font-family:'Georgia','Iowan Old Style',serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:28px 16px 60px;
+  }
+  .wrap{width:100%;max-width:640px;}
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:'Courier New',monospace;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--amber);
+    font-size:11px;
+    margin-bottom:8px;
+  }
+  h1{
+    margin:0 0 6px;
+    font-size:32px;
+    font-weight:400;
+    letter-spacing:-.01em;
+  }
+  .sub{color:var(--muted);font-size:14px;font-family:'Courier New',monospace;}
+
+  .wave{
+    display:flex;
+    align-items:flex-end;
+    gap:3px;
+    height:28px;
+    margin:20px 0 24px;
+  }
+  .wave span{
+    width:3px;
+    background:var(--amber-dim);
+    border-radius:2px;
+    animation:bob 1.4s ease-in-out infinite;
+  }
+  @keyframes bob{
+    0%,100%{transform:scaleY(.3);}
+    50%{transform:scaleY(1);}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:20px;
+  }
+
+  .voices{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .voice-btn{
+    flex:1;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--muted);
+    padding:12px 10px;
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    cursor:pointer;
+    border-radius:2px;
+    transition:.15s;
+    text-align:left;
+  }
+  .voice-btn span{display:block;color:var(--paper);font-family:Georgia,serif;font-size:16px;margin-bottom:2px;}
+  .voice-btn.active{
+    border-color:var(--amber);
+    background:rgba(224,164,88,.08);
+    color:var(--amber);
+  }
+  .voice-btn.active span{color:var(--amber);}
+
+  textarea{
+    width:100%;
+    min-height:220px;
+    background:#100d0b;
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:Georgia,serif;
+    font-size:16px;
+    line-height:1.6;
+    padding:14px;
+    border-radius:2px;
+    resize:vertical;
+  }
+  textarea:focus{outline:1px solid var(--amber);}
+  textarea::placeholder{color:#5c5347;}
+
+  .meta{
+    display:flex;
+    justify-content:space-between;
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin:8px 0 20px;
+  }
+  .meta .over{color:#d9765a;}
+
+  button.go{
+    width:100%;
+    background:var(--amber);
+    color:#1a1410;
+    border:none;
+    padding:15px;
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    font-weight:bold;
+    cursor:pointer;
+    border-radius:2px;
+    transition:.15s;
+  }
+  button.go:hover:not(:disabled){background:#eeb877;}
+  button.go:disabled{opacity:.4;cursor:not-allowed;}
+
+  .status{
+    margin-top:16px;
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    color:var(--muted);
+    min-height:18px;
+  }
+
+  .result{
+    margin-top:18px;
+    display:none;
+  }
+  audio{width:100%;margin-bottom:10px;}
+  .dl{
+    display:inline-block;
+    color:var(--amber);
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    text-decoration:none;
+    border-bottom:1px solid var(--amber-dim);
+  }
+
+  footer{
+    margin-top:30px;
+    color:var(--muted);
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">TTS · Tiếng Việt · Miễn phí</div>
+    <h1>Đọc Giùm</h1>
+    <div class="sub">Nam Minh &amp; Hoài My — tối đa 20.000 ký tự / lần</div>
+  </header>
+
+  <div class="wave" id="wave"></div>
+
+  <div class="panel">
+    <div class="voices">
+      <button class="voice-btn active" data-voice="nam-minh"><span>Nam Minh</span>Giọng nam</button>
+      <button class="voice-btn" data-voice="hoai-my"><span>Hoài My</span>Giọng nữ</button>
+    </div>
+
+    <textarea id="text" placeholder="Dán văn bản vào đây..." maxlength="20000"></textarea>
+    <div class="meta">
+      <span id="count">0 / 20.000 ký tự</span>
+      <span id="chunks"></span>
+    </div>
+
+    <button class="go" id="submit">Tạo giọng đọc</button>
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <audio id="player" controls></audio>
+      <br>
+      <a class="dl" id="download" download>Tải file MP3 ↓</a>
+    </div>
+  </div>
+
+  <footer>chạy trên edge-tts · không cần đăng nhập · không giới hạn số lần</footer>
+</div>
+
+<script>
+  // thanh sóng âm trang trí
+  const wave = document.getElementById('wave');
+  for (let i = 0; i < 40; i++) {
+    const bar = document.createElement('span');
+    bar.style.height = (10 + Math.random() * 18) + 'px';
+    bar.style.animationDelay = (Math.random() * 1.4) + 's';
+    wave.appendChild(bar);
+  }
+
+  let selectedVoice = 'nam-minh';
+  document.querySelectorAll('.voice-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.voice-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedVoice = btn.dataset.voice;
+    });
+  });
+
+  const textEl = document.getElementById('text');
+  const countEl = document.getElementById('count');
+  const chunksEl = document.getElementById('chunks');
+  const submitBtn = document.getElementById('submit');
+  const statusEl = document.getElementById('status');
+  const resultEl = document.getElementById('result');
+  const playerEl = document.getElementById('player');
+  const downloadEl = document.getElementById('download');
+
+  textEl.addEventListener('input', () => {
+    const len = textEl.value.length;
+    countEl.textContent = `${len.toLocaleString('vi-VN')} / 20.000 ký tự`;
+    countEl.className = len > 20000 ? 'over' : '';
+    const estChunks = Math.max(1, Math.ceil(len / 1800));
+    chunksEl.textContent = len > 0 ? `~${estChunks} đoạn xử lý` : '';
+  });
+
+  submitBtn.addEventListener('click', async () => {
+    const text = textEl.value.trim();
+    if (!text) {
+      statusEl.textContent = 'Nhập văn bản trước đã.';
+      return;
+    }
+    if (text.length > 20000) {
+      statusEl.textContent = 'Văn bản đang vượt quá 20.000 ký tự.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    resultEl.style.display = 'none';
+    statusEl.textContent = 'Đang tạo giọng đọc, chờ chút...';
+
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: selectedVoice })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Lỗi server (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      playerEl.src = url;
+      downloadEl.href = url;
+      downloadEl.download = `doc-giup-${Date.now()}.mp3`;
+      resultEl.style.display = 'block';
+      statusEl.textContent = 'Xong!';
+    } catch (e) {
+      statusEl.textContent = 'Lỗi: ' + e.message;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
