@@ -120,6 +120,20 @@
   }
   .meta .over{color:#d9765a;}
 
+  .filename-input{
+    width:100%;
+    background:#100d0b;
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    padding:10px 12px;
+    border-radius:2px;
+    margin-bottom:12px;
+  }
+  .filename-input:focus{outline:1px solid var(--amber);}
+  .filename-input::placeholder{color:#5c5347;}
+
   button.go{
     width:100%;
     background:var(--amber);
@@ -146,6 +160,23 @@
     min-height:18px;
   }
 
+  .progress-track{
+    width:100%;
+    height:6px;
+    background:#100d0b;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+    margin-top:10px;
+    display:none;
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    background:var(--amber);
+    transition:width .3s ease;
+  }
+
   .result{
     margin-top:18px;
     display:none;
@@ -166,6 +197,79 @@
     font-family:'Courier New',monospace;
     font-size:11px;
     text-align:center;
+  }
+
+  .history{
+    margin-top:32px;
+  }
+  .history h2{
+    font-size:14px;
+    font-weight:400;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    color:var(--muted);
+    font-family:'Courier New',monospace;
+    margin:0 0 12px;
+  }
+  .history-item{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:14px;
+    margin-bottom:10px;
+  }
+  .history-item .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:6px;
+  }
+  .history-item .badge{
+    color:var(--amber);
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .history-item .date{
+    color:var(--muted);
+    font-family:'Courier New',monospace;
+    font-size:11px;
+  }
+  .history-item .preview{
+    font-size:14px;
+    color:var(--paper);
+    margin-bottom:10px;
+    line-height:1.5;
+  }
+  .history-item audio{
+    width:100%;
+    height:32px;
+    margin-bottom:8px;
+  }
+  .history-actions{
+    display:flex;
+    gap:14px;
+  }
+  .history-actions a, .history-actions button{
+    background:none;
+    border:none;
+    padding:0;
+    color:var(--amber-dim);
+    font-family:'Courier New',monospace;
+    font-size:12px;
+    text-decoration:none;
+    cursor:pointer;
+    border-bottom:1px solid transparent;
+  }
+  .history-actions a:hover, .history-actions button:hover{
+    color:var(--amber);
+    border-bottom-color:var(--amber-dim);
+  }
+  .history-empty{
+    color:var(--muted);
+    font-family:'Courier New',monospace;
+    font-size:12px;
   }
 </style>
 </head>
@@ -191,7 +295,10 @@
       <span id="chunks"></span>
     </div>
 
+    <input type="text" class="filename-input" id="filenameInput" placeholder="Tên file (không bắt buộc, VD: chuong-1)" maxlength="100">
+
     <button class="go" id="submit">Tạo giọng đọc</button>
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     <div class="status" id="status"></div>
 
     <div class="result" id="result">
@@ -201,11 +308,15 @@
     </div>
   </div>
 
+  <div class="history">
+    <h2>Lịch sử</h2>
+    <div id="historyList"><div class="history-empty">Đang tải...</div></div>
+  </div>
+
   <footer>chạy trên edge-tts · không cần đăng nhập · không giới hạn số lần</footer>
 </div>
 
 <script>
-  // thanh sóng âm trang trí
   const wave = document.getElementById('wave');
   for (let i = 0; i < 40; i++) {
     const bar = document.createElement('span');
@@ -236,12 +347,20 @@
     const len = textEl.value.length;
     countEl.textContent = `${len.toLocaleString('vi-VN')} / 20.000 ký tự`;
     countEl.className = len > 20000 ? 'over' : '';
-    const estChunks = Math.max(1, Math.ceil(len / 1800));
+    const estChunks = Math.max(1, Math.ceil(len / 2000));
     chunksEl.textContent = len > 0 ? `~${estChunks} đoạn xử lý` : '';
   });
 
+  const progressTrack = document.getElementById('progressTrack');
+  const progressFill = document.getElementById('progressFill');
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  const filenameInput = document.getElementById('filenameInput');
+
   submitBtn.addEventListener('click', async () => {
     const text = textEl.value.trim();
+    const customName = filenameInput.value.trim();
     if (!text) {
       statusEl.textContent = 'Nhập văn bản trước đã.';
       return;
@@ -253,33 +372,99 @@
 
     submitBtn.disabled = true;
     resultEl.style.display = 'none';
-    statusEl.textContent = 'Đang tạo giọng đọc, chờ chút...';
+    progressTrack.style.display = 'block';
+    progressFill.style.width = '0%';
+    statusEl.textContent = 'Đang gửi văn bản...';
 
     try {
-      const res = await fetch('/api/tts', {
+      const startRes = await fetch('/api/tts/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: selectedVoice })
+        body: JSON.stringify({ text, voice: selectedVoice, filename: customName })
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Lỗi server (${res.status})`);
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({}));
+        throw new Error(err.detail || `Lỗi server (${startRes.status})`);
       }
+      const { job_id, total } = await startRes.json();
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      playerEl.src = url;
-      downloadEl.href = url;
-      downloadEl.download = `doc-giup-${Date.now()}.mp3`;
-      resultEl.style.display = 'block';
-      statusEl.textContent = 'Xong!';
+      let done = false;
+      while (!done) {
+        await sleep(1500);
+        const statusRes = await fetch(`/api/tts/status/${job_id}`);
+        if (!statusRes.ok) throw new Error('Mất kết nối tới server.');
+        const s = await statusRes.json();
+
+        const pct = total > 0 ? Math.round((s.completed / s.total) * 100) : 0;
+        progressFill.style.width = pct + '%';
+        statusEl.textContent = `Đang tạo giọng đọc... ${s.completed}/${s.total} đoạn`;
+
+        if (s.status === 'done') {
+          done = true;
+          const audioRes = await fetch(`/api/tts/result/${job_id}`);
+          const blob = await audioRes.blob();
+          const url = URL.createObjectURL(blob);
+          playerEl.src = url;
+          downloadEl.href = url;
+          downloadEl.download = customName ? `${customName}.mp3` : `doc-giup-${Date.now()}.mp3`;
+          resultEl.style.display = 'block';
+          statusEl.textContent = 'Xong!';
+        } else if (s.status === 'error') {
+          throw new Error(s.error || 'Không tạo được âm thanh.');
+        }
+      }
     } catch (e) {
       statusEl.textContent = 'Lỗi: ' + e.message;
     } finally {
       submitBtn.disabled = false;
+      progressTrack.style.display = 'none';
+      loadHistory();
     }
   });
+
+  const historyListEl = document.getElementById('historyList');
+
+  async function loadHistory() {
+    try {
+      const res = await fetch('/api/history');
+      const items = await res.json();
+      if (!items.length) {
+        historyListEl.innerHTML = '<div class="history-empty">Chưa có audio nào.</div>';
+        return;
+      }
+      historyListEl.innerHTML = items.map(item => {
+        const dlName = item.custom_name ? `${item.custom_name}.mp3` : `doc-giup-${item.id}.mp3`;
+        const title = item.custom_name ? `<span class="badge" style="color:var(--paper)">${item.custom_name}</span>` : '';
+        return `
+        <div class="history-item" data-id="${item.id}">
+          <div class="row">
+            <span class="badge">${item.voice_label}</span>
+            <span class="date">${item.created_at}</span>
+          </div>
+          ${title}
+          <div class="preview">${item.preview.replace(/</g, '&lt;')}</div>
+          <audio controls preload="none" src="/api/history/${item.id}/audio"></audio>
+          <div class="history-actions">
+            <a href="/api/history/${item.id}/audio" download="${dlName}">Tải MP3 ↓</a>
+            <button type="button" data-delete="${item.id}">Xoá</button>
+          </div>
+        </div>
+      `;
+      }).join('');
+
+      historyListEl.querySelectorAll('[data-delete]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.delete;
+          await fetch(`/api/history/${id}`, { method: 'DELETE' });
+          loadHistory();
+        });
+      });
+    } catch (e) {
+      historyListEl.innerHTML = '<div class="history-empty">Không tải được lịch sử.</div>';
+    }
+  }
+
+  loadHistory();
 </script>
 </body>
 </html>
